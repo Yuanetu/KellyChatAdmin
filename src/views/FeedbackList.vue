@@ -29,7 +29,7 @@
 
     <el-card shadow="never">
       <el-table :data="feedbackList" stripe border style="width:100%" max-height="600" v-loading="loading">
-        <el-table-column type="index" label="序号" width="60" align="center" :index="i => (page - 1) * pageSize + i + 1" />
+        <el-table-column type="index" label="序号" width="60" align="center" :index="(i: number) => (page - 1) * pageSize + i + 1" />
         <el-table-column prop="id" label="反馈ID" width="110" />
         <el-table-column label="反馈内容" min-width="250" show-overflow-tooltip>
           <template #default="{ row }">

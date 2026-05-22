@@ -23,17 +23,8 @@ function formatNow(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function getDayOfMonth(date: Date): number {
-  return date.getDate()
-}
-
 function getDaySuffix(day: number): string {
   return `${day}号`
-}
-
-function calcChange(current: number, previous: number): number {
-  if (previous === 0) return current > 0 ? 100 : 0
-  return Number((((current - previous) / previous) * 100).toFixed(1))
 }
 
 function getWeekRange(): string {
@@ -47,52 +38,6 @@ function getWeekRange(): string {
 function getMonthRange(): string {
   const now = new Date()
   return `01-${getDaySuffix(now.getDate())}`
-}
-
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate()
-}
-
-const dailyNewUsers: Record<string, number> = {}
-const dailyActiveUsers: Record<string, number> = {}
-const dailyRetentionBase: Record<string, number> = {}
-const dailyRetentionActive: Record<string, number> = {}
-
-function initDailyData() {
-  const now = new Date()
-  for (let i = 0; i < 60; i++) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    if (!dailyNewUsers[key]) {
-      dailyNewUsers[key] = randomInt(300, 600)
-    }
-    if (!dailyActiveUsers[key]) {
-      dailyActiveUsers[key] = randomInt(15000, 30000)
-    }
-    if (!dailyRetentionBase[key]) {
-      dailyRetentionBase[key] = dailyNewUsers[key]
-    }
-    if (!dailyRetentionActive[key]) {
-      const base = dailyRetentionBase[key]
-      const rate = i === 0 ? 1 : Math.max(0.1, 0.5 - i * 0.008 + (Math.random() - 0.5) * 0.1)
-      dailyRetentionActive[key] = Math.round(base * rate)
-    }
-  }
-}
-
-function getDailyNew(dateStr: string): number {
-  return dailyNewUsers[dateStr] || 0
-}
-
-function getDailyActive(dateStr: string): number {
-  return dailyActiveUsers[dateStr] || 0
-}
-
-function getDateKey(daysAgo: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - daysAgo)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function getMockDashboardData(): DashboardData {

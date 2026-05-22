@@ -57,7 +57,7 @@
 
     <el-card shadow="never">
       <el-table :data="reportList" stripe border style="width:100%" max-height="600" v-loading="loading">
-        <el-table-column type="index" label="序号" width="60" align="center" :index="i => (page - 1) * pageSize + i + 1" />
+        <el-table-column type="index" label="序号" width="60" align="center" :index="(i: number) => (page - 1) * pageSize + i + 1" />
         <el-table-column prop="id" label="举报ID" width="110" />
         <el-table-column label="举报理由" width="140">
           <template #default="{ row }">
