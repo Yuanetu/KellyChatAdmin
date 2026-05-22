@@ -6,8 +6,15 @@ import UserList from '@/views/UserList.vue'
 import ReportList from '@/views/ReportList.vue'
 import FeedbackList from '@/views/FeedbackList.vue'
 import Login from '@/views/Login.vue'
+import OfficialWebsite from '@/views/OfficialWebsite.vue'
 
 const routes = [
+  {
+    path: '/home',
+    name: 'OfficialWebsite',
+    component: OfficialWebsite,
+    meta: { title: 'kellyChat - 遇见有趣的灵魂', requiresAuth: false }
+  },
   {
     path: '/login',
     name: 'Login',
