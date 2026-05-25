@@ -14,14 +14,30 @@ export function getUserList(params: UserListParams) {
   return request.get<any, ApiResponse<ApiUserListData>>('/api/admin/user/list', { params })
 }
 
-export function auditUser(id: number, data: { anomalyItems: string[] }) {
-  return request.put<any, ApiResponse<void>>(`/api/admin/user/${id}/audit`, data)
+export interface UserAuditRequest {
+  avatarAudit?: number | null
+  nicknameAudit?: number | null
+  tagAudit?: number | null
+  bioAudit?: number | null
+  photosAudit?: number | null
 }
 
-export function muteUser(id: number, data: { duration: number }) {
-  return request.put<any, ApiResponse<void>>(`/api/admin/user/${id}/mute`, data)
+export function auditUser(userId: number, data: UserAuditRequest) {
+  return request.post<any, ApiResponse<boolean>>(`/api/admin/user/${userId}/audit`, data)
 }
 
-export function banUser(id: number, data: { duration: number }) {
-  return request.put<any, ApiResponse<void>>(`/api/admin/user/${id}/ban`, data)
+export function muteUser(userId: number, data: { days?: number }) {
+  return request.post<any, ApiResponse<boolean>>(`/api/admin/user/${userId}/mute`, data)
+}
+
+export function unmuteUser(userId: number) {
+  return request.post<any, ApiResponse<boolean>>(`/api/admin/user/${userId}/unmute`, { userId })
+}
+
+export function banUser(data: { userId: number; days?: number }) {
+  return request.post<any, ApiResponse<boolean>>(`/api/admin/user/${data.userId}/ban`, data)
+}
+
+export function unbanUser(userId: number) {
+  return request.post<any, ApiResponse<boolean>>(`/api/admin/user/${userId}/unban`, { userId })
 }

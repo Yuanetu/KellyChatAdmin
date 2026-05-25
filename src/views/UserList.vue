@@ -173,7 +173,7 @@
         <el-table-column label="项目" width="100" align="center">
           <template #default="{ row }">{{ row.label }}</template>
         </el-table-column>
-        <el-table-column label="内容" min-width="200">
+        <el-table-column label="内容" min-width="150">
           <template #default="{ row }">
             <div v-if="row.key === 'avatar'">
               <el-avatar v-if="auditModalUser?.avatar" :size="48" :src="auditModalUser.avatar" style="cursor:pointer" @click="previewImage(auditModalUser.avatar)" />
@@ -196,20 +196,18 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="标记状态" width="100" align="center">
+        <el-table-column label="审核状态" width="150" align="center">
           <template #default="{ row }">
-            <span v-if="isAuditFieldAnomaly(row.key)" style="color:#f56c6c;font-weight:600">异常</span>
-            <span v-else style="color:#67c23a">正常</span>
+            <el-select v-model="auditForm[row.fieldKey as keyof typeof auditForm]" placeholder="不修改" style="width:110px" size="small">
+              <el-option :value="null" label="不修改" />
+              <el-option :value="0" label="正常" />
+              <el-option :value="1" label="待审核" />
+              <el-option :value="2" label="违规" />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="说明" width="200">
           <template #default="{ row }">{{ row.description }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
-          <template #default="{ row }">
-            <el-button v-if="isAuditFieldAnomaly(row.key)" type="primary" link size="small" @click="toggleAuditField(row.key)">取消标记</el-button>
-            <el-button v-else type="danger" link size="small" @click="toggleAuditField(row.key)">标记异常</el-button>
-          </template>
         </el-table-column>
       </el-table>
       <template #footer>
@@ -301,10 +299,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
-import { getUserList, muteUser, banUser } from '@/api/users'
+import { getUserList, auditUser, muteUser, unmuteUser, banUser, unbanUser } from '@/api/users'
 import type { ApiUser } from '@/types'
 
 const genderMap: Record<number, string> = { 0: '未知', 1: '男', 2: '女' }
@@ -409,69 +407,90 @@ function openBioModal(user: ApiUser) { bioModalData.value = user.signature; bioM
 
 const auditModalVisible = ref(false)
 const auditModalUser = ref<ApiUser | null>(null)
-const auditAnomalyFields = ref<string[]>([])
 const auditTags = ref<string[]>([])
 const auditPhotos = ref<string[]>([])
 
 const auditTableData = [
   {
     key: 'avatar',
+    fieldKey: 'avatarAudit',
     label: '用户头像',
     description: '标记异常后，App上将显示系统默认头像',
     getValue: (u: ApiUser) => u.avatar || ''
   },
   {
     key: 'nickname',
+    fieldKey: 'nicknameAudit',
     label: '用户昵称',
     description: '标记异常后，App上将显示系统默认昵称',
     getValue: (u: ApiUser) => u.nickname || ''
   },
   {
     key: 'tags',
+    fieldKey: 'tagAudit',
     label: '用户标签',
     description: '标记异常后，App上将隐藏该标签',
     getValue: () => ''
   },
   {
     key: 'signature',
+    fieldKey: 'bioAudit',
     label: '个人简介',
     description: '标记异常后，App上将隐藏个人简介',
     getValue: (u: ApiUser) => u.signature || ''
   },
   {
     key: 'photoWall',
+    fieldKey: 'photosAudit',
     label: '照片墙',
     description: '标记异常后，App上将隐藏对应照片',
     getValue: () => ''
   }
 ]
 
-function isAuditFieldAnomaly(key: string): boolean {
-  return auditAnomalyFields.value.includes(key)
+interface AuditForm {
+  avatarAudit: number | null
+  nicknameAudit: number | null
+  tagAudit: number | null
+  bioAudit: number | null
+  photosAudit: number | null
 }
 
-function toggleAuditField(key: string) {
-  const idx = auditAnomalyFields.value.indexOf(key)
-  if (idx !== -1) {
-    auditAnomalyFields.value.splice(idx, 1)
-  } else {
-    auditAnomalyFields.value.push(key)
-  }
-}
+const auditForm = reactive<AuditForm>({
+  avatarAudit: null,
+  nicknameAudit: null,
+  tagAudit: null,
+  bioAudit: null,
+  photosAudit: null
+})
 
 function openAuditModal(user: ApiUser) {
   auditModalUser.value = user
-  auditAnomalyFields.value = []
+  auditForm.avatarAudit = null
+  auditForm.nicknameAudit = null
+  auditForm.tagAudit = null
+  auditForm.bioAudit = null
+  auditForm.photosAudit = null
   auditTags.value = []
   auditPhotos.value = []
   auditModalVisible.value = true
 }
 
-function submitAudit() {
+async function submitAudit() {
   if (!auditModalUser.value) return
+  
+  try {
+    const res = await auditUser(auditModalUser.value.id, auditForm)
+    if (res.code === 200) {
+      ElMessage.success('审核提交成功')
+      loadData()
+    } else {
+      ElMessage.error(res.message || '审核失败')
+    }
+  } catch {
+    ElMessage.error('审核失败')
+  }
   auditModalVisible.value = false
-  ElMessage.success('审核提交成功')
-  loadData()
 }
 
 const muteModalVisible = ref(false)
@@ -499,8 +518,7 @@ function onMuteDurationTypeChange() {
 }
 
 function isUserMuted(user: ApiUser): boolean {
-  if (!user.muteEndTime) return false
-  return new Date(user.muteEndTime).getTime() > Date.now()
+  return user.isMuted
 }
 
 function openMuteModal(user: ApiUser) {
@@ -520,7 +538,7 @@ async function submitMute() {
   if (!muteModalUser.value) return
   if (!muteEnabled.value) {
     try {
-      const res = await muteUser(muteModalUser.value.id, { duration: 0 })
+      const res = await unmuteUser(muteModalUser.value.id)
       if (res.code === 200) {
         ElMessage.success('已取消禁言')
         loadData()
@@ -533,7 +551,7 @@ async function submitMute() {
     muteModalVisible.value = false
     return
   }
-  let duration = 0
+  let days: number | undefined = undefined
   if (muteDurationType.value === 'custom') {
     if (!muteCustomEndTime.value) {
       ElMessage.warning('请选择禁言结束时间')
@@ -545,15 +563,17 @@ async function submitMute() {
       ElMessage.warning('结束时间必须晚于当前时间')
       return
     }
-    duration = Math.ceil(diff / 86400000)
+    days = Math.ceil(diff / 86400000)
   } else {
-    duration = parseInt(muteDurationType.value)
+    days = parseInt(muteDurationType.value)
   }
-  if (duration <= 0) return
+  if (days !== undefined && days <= 0) {
+    days = undefined
+  }
   try {
-    const res = await muteUser(muteModalUser.value.id, { duration })
+    const res = await muteUser(muteModalUser.value.id, { days })
     if (res.code === 200) {
-      ElMessage.success('禁言设置成功')
+      ElMessage.success(days !== undefined ? '禁言设置成功' : '已设置永久禁言')
       loadData()
     } else {
       ElMessage.error(res.message || '禁言设置失败')
@@ -584,8 +604,7 @@ function onBanDurationTypeChange() {
 }
 
 function isUserBanned(user: ApiUser): boolean {
-  if (!user.banEndTime) return false
-  return new Date(user.banEndTime).getTime() > Date.now()
+  return user.isBanned
 }
 
 function openBanModal(user: ApiUser) {
@@ -601,7 +620,7 @@ async function submitBan() {
   if (!banModalUser.value) return
   if (!banEnabled.value) {
     try {
-      const res = await banUser(banModalUser.value.id, { duration: 0 })
+      const res = await unbanUser(banModalUser.value.id)
       if (res.code === 200) {
         ElMessage.success('已取消封禁')
         loadData()
@@ -614,7 +633,7 @@ async function submitBan() {
     banModalVisible.value = false
     return
   }
-  let duration = 0
+  let days: number | undefined = undefined
   if (banDurationType.value === 'custom') {
     if (!banCustomEndTime.value) {
       ElMessage.warning('请选择封禁结束时间')
@@ -626,15 +645,17 @@ async function submitBan() {
       ElMessage.warning('结束时间必须晚于当前时间')
       return
     }
-    duration = Math.ceil(diff / 86400000)
+    days = Math.ceil(diff / 86400000)
   } else {
-    duration = parseInt(banDurationType.value)
+    days = parseInt(banDurationType.value)
   }
-  if (duration <= 0) return
+  if (days !== undefined && days <= 0) {
+    days = undefined
+  }
   try {
-    const res = await banUser(banModalUser.value.id, { duration })
+    const res = await banUser({ days, userId: banModalUser.value.id })
     if (res.code === 200) {
-      ElMessage.success('封禁设置成功')
+      ElMessage.success(days !== undefined ? '封禁设置成功' : '已设置永久封禁')
       loadData()
     } else {
       ElMessage.error(res.message || '封禁设置失败')

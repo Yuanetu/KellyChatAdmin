@@ -108,7 +108,9 @@ export interface ApiUser {
   lastUserAgent: string
   auditStatus: number
   userStatus: number
+  isMuted: boolean
   muteEndTime: string
+  isBanned: boolean
   banEndTime: string
   profileVector: string
   vectorUpdatedAt: string
