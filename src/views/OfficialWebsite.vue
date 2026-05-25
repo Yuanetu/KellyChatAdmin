@@ -29,17 +29,15 @@
   position: relative;
 
   img {
-    width: 100%;
     height: auto;
   }
 
   .site-footer {
     color: #666;
-    margin-top: auto;
     position: absolute;
     bottom: 10px;
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
 
     a {
       color: #666;
