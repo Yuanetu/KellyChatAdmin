@@ -12,8 +12,8 @@
           </el-col>
           <el-col :span="6">
             <el-form-item label="举报理由">
-              <el-select v-model="filters.reportType" multiple placeholder="不限" clearable style="width:100%">
-                <el-option v-for="opt in reportTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              <el-select v-model="filters.reason" multiple placeholder="不限" clearable style="width:100%">
+                <el-option v-for="opt in reasonOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -61,7 +61,7 @@
         <el-table-column prop="id" label="举报ID" width="110" />
         <el-table-column label="举报理由" width="140">
           <template #default="{ row }">
-            <el-tag size="small" type="info">{{ reportTypeMap[row.reportType] || '未知' }}</el-tag>
+            <el-tag size="small" type="info">{{ reasonMap[row.reportType] || row.reportType || '未知' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="举报描述" width="160" show-overflow-tooltip>
@@ -205,26 +205,36 @@
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
-import { getReportList, muteReportTarget, banReportTarget, markReportInvalid } from '@/api/reports'
+import { getReportList, handleReport } from '@/api/reports'
 import type { ApiReport } from '@/types'
+import type { ReportQueryRequest } from '@/api/reports'
 
-const reportTypeMap: Record<number, string> = {
-  1: '色情低俗', 2: '政治敏感', 3: '涉嫌欺诈', 4: '谩骂嘲讽',
-  5: '歧视', 6: '网络暴力', 7: '冒充他人', 8: '违法违规',
-  9: '涉及未成年不当内容', 10: '违反公德良序', 11: '危害人身安全', 12: '其他违规类型'
+const reasonMap: Record<string, string> = {
+  PORNOGRAPHIC: '色情低俗',
+  POLITICAL_SENSITIVE: '政治敏感',
+  FRAUD: '涉嫌欺诈',
+  INSULT: '谩骂嘲讽',
+  DISCRIMINATION: '歧视',
+  CYBERBULLYING: '网络暴力',
+  IMPERSONATION: '冒充他人',
+  ILLEGAL: '违法违规',
+  UNDERAGE_CONTENT: '涉及未成年不当内容',
+  PUBLIC_ORDER: '违反公德良序',
+  PERSONAL_SAFETY: '危害人身安全',
+  OTHER: '其他违规类型'
 }
 const statusMap: Record<number, string> = { 0: '待处理', 1: '已处理', 2: '无效举报' }
 const handleTypeMap: Record<number, string> = { 1: '禁言', 2: '封禁' }
 const statusTagType: Record<number, string> = { 0: 'warning', 1: 'success', 2: 'info' }
 const handleTypeTagType: Record<number, string> = { 1: 'warning', 2: 'danger' }
 
-const reportTypeOptions = Object.entries(reportTypeMap).map(([value, label]) => ({ value: Number(value), label }))
+const reasonOptions = Object.entries(reasonMap).map(([value, label]) => ({ value, label }))
 const statusOptions = Object.entries(statusMap).map(([value, label]) => ({ value: Number(value), label }))
 const handleTypeOptions = Object.entries(handleTypeMap).map(([value, label]) => ({ value: Number(value), label }))
 
 interface FilterState {
   keyword: string
-  reportType: number[]
+  reason: string[]
   status: number[]
   reportTimeRange: string[] | null
   handleTimeRange: string[] | null
@@ -232,7 +242,7 @@ interface FilterState {
 }
 
 function createDefaultFilters(): FilterState {
-  return { keyword: '', reportType: [], status: [], reportTimeRange: null, handleTimeRange: null, handleType: [] }
+  return { keyword: '', reason: [], status: [], reportTimeRange: null, handleTimeRange: null, handleType: [] }
 }
 
 const filters = ref<FilterState>(createDefaultFilters())
@@ -255,7 +265,20 @@ function parseImages(images: string): string[] {
 async function loadData() {
   loading.value = true
   try {
-    const res = await getReportList({ page: page.value, size: pageSize.value })
+    const f = filters.value
+    const params: ReportQueryRequest = {
+      keyword: f.keyword || undefined,
+      reason: f.reason.length > 0 ? f.reason[0] : undefined,
+      status: f.status.length > 0 ? f.status[0] : undefined,
+      handleType: f.handleType.length > 0 ? f.handleType[0] : undefined,
+      reportTimeStart: f.reportTimeRange?.[0] || undefined,
+      reportTimeEnd: f.reportTimeRange?.[1] || undefined,
+      handleTimeStart: f.handleTimeRange?.[0] || undefined,
+      handleTimeEnd: f.handleTimeRange?.[1] || undefined,
+      page: page.value,
+      size: pageSize.value
+    }
+    const res = await getReportList(params)
     if (res.code === 200) {
       reportList.value = res.data.list
       total.value = res.data.total
@@ -313,18 +336,20 @@ async function submitMute() {
     muteModalVisible.value = false
     return
   }
-  let duration = 0
+  let days: number | undefined = undefined
   if (muteDurationType.value === 'custom') {
     if (!muteCustomEndTime.value) { ElMessage.warning('请选择禁言结束时间'); return }
     const diff = new Date(muteCustomEndTime.value).getTime() - Date.now()
     if (diff <= 0) { ElMessage.warning('结束时间必须晚于当前时间'); return }
-    duration = Math.ceil(diff / 86400000)
+    days = Math.ceil(diff / 86400000)
   } else {
-    duration = parseInt(muteDurationType.value)
+    days = parseInt(muteDurationType.value)
   }
-  if (duration <= 0) return
+  if (days !== undefined && days <= 0) {
+    days = undefined
+  }
   try {
-    const res = await muteReportTarget(muteModalReport.value.id, { duration })
+    const res = await handleReport(muteModalReport.value.id, { action: 'mute', days })
     if (res.code === 200) {
       ElMessage.success('禁言设置成功')
       loadData()
@@ -366,18 +391,20 @@ async function submitBan() {
     banModalVisible.value = false
     return
   }
-  let duration = 0
+  let days: number | undefined = undefined
   if (banDurationType.value === 'custom') {
     if (!banCustomEndTime.value) { ElMessage.warning('请选择封禁结束时间'); return }
     const diff = new Date(banCustomEndTime.value).getTime() - Date.now()
     if (diff <= 0) { ElMessage.warning('结束时间必须晚于当前时间'); return }
-    duration = Math.ceil(diff / 86400000)
+    days = Math.ceil(diff / 86400000)
   } else {
-    duration = parseInt(banDurationType.value)
+    days = parseInt(banDurationType.value)
   }
-  if (duration <= 0) return
+  if (days !== undefined && days <= 0) {
+    days = undefined
+  }
   try {
-    const res = await banReportTarget(banModalReport.value.id, { duration })
+    const res = await handleReport(banModalReport.value.id, { action: 'ban', days })
     if (res.code === 200) {
       ElMessage.success('封禁设置成功')
       loadData()
@@ -392,7 +419,7 @@ async function submitBan() {
 
 async function handleInvalid(report: ApiReport) {
   try {
-    const res = await markReportInvalid(report.id)
+    const res = await handleReport(report.id, { action: 'invalid' })
     if (res.code === 200) {
       ElMessage.success('操作成功')
       loadData()
